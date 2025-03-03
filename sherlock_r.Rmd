@@ -1,0 +1,234 @@
+---
+title: "text_mining_sherlock"
+output: html_document
+date: "2025-03-02"
+---
+
+```{r}
+#Installing Libraries and Data
+
+library(tidyverse)
+
+sherlock <- readLines("sherlock.txt")
+
+head(sherlock)
+length(sherlock)
+tail(sherlock)
+
+```
+
+```{r} 
+#Text Splitting into 12 Parts
+
+sherlock <- sherlock[-(1:61)] 
+sherlock <- sherlock[-(12621:12992)]
+
+sherlock <- paste(sherlock, collapse = " ")
+
+a <- strsplit(sherlock, ">>")
+
+a <- unlist(a)
+
+a <- a[-1]
+
+a[1]
+a[12]
+
+```
+
+```{r} 
+#Creating Document Vector and Corpus
+
+install.packages("tm")
+library(tm)
+
+class(a)
+
+document_a <- VectorSource(a)
+
+class(document_a)
+
+attributes(document_a)
+
+document_a[2]
+           
+document_xx <- VCorpus(document_a)
+
+class(document_xx)
+
+attributes(document_xx)
+
+```
+
+```{r} 
+#Cleaning the Data Using Corpus Library
+
+document_xx <- tm_map(document_xx, content_transformer(tolower)) #changing every letter to small cap
+document_xx <- tm_map(document_xx, content_transformer(removePunctuation)) #removing punctuation marks
+document_xx <- tm_map(document_xx, content_transformer(removeNumbers)) #removing numbers
+document_xx <- tm_map(document_xx, removeWords, stopwords(kind = "en")) #removing the most used words in English 
+
+```
+
+```{r} 
+#Reducing Words to Their Roots
+
+install.packages("SnowballC")
+library(SnowballC)
+
+document_xx <- tm_map(document_xx, stemDocument)
+document_xx <- tm_map(document_xx, stripWhitespace)
+document_xx[1]
+
+```
+
+```{r} 
+#Creating a Term Document Matrix
+
+tdm <- TermDocumentMatrix(document_xx)
+
+inspect(tdm[1:4, 1:4])
+
+attributes(tdm)
+
+tdm$nrow  
+
+tdm$ncol
+
+tdm$dimnames$Docs
+
+colnames(tdm) <- c("I. A Scandal in Bohemia",
+                   "II. The Red-headed League",
+                   "III. A Case of Identity",
+                   "IV. The Boscombe Valley Mystery",
+                   "V. The Five Orange Pips",
+                   "VI. The Man with the Twisted Lip",
+                   "VII. The Adventure of the Blue Carbuncle",
+                   "VIII. The Adventure of the Speckled Band",
+                   "IX. The Adventure of the Engineer's Thumb",
+                   "X. The Adventure of the Noble Bachelor",
+                   "XI. The Adventure of the Beryl Coronet",
+                   "XII. The Adventure of the Copper Beeches"
+                  )
+
+tdm$dimnames$Docs
+colnames(tdm)
+
+findFreqTerms(tdm, 100) #words occurring at least 100 times
+
+findAssocs(tdm, "watson", 0.8) #Which words are associated with the word watson with a correlation rate of 0.8?
+
+findAssocs(tdm, "hudson", 0.85) #Which words are associated with the word hudson with a correlation rate of 0.85?
+
+
+tdm_frequent <- removeSparseTerms(tdm, 0.1) #reducing sparsity 
+tdm_frequent
+
+inspect(tdm_frequent[1:10, 1:2])
+
+```
+
+```{r}
+#Visualization, Histogram and Barplot
+
+tdm_matrix <- as.matrix(tdm_frequent)
+
+frequencies <- rowSums(tdm_matrix)
+
+head(frequencies)
+
+names <- rownames(tdm_matrix)
+
+head(names)
+
+frequencies["love"]
+frequencies["watson"]
+
+hist(frequencies, col ="blue")
+
+#There are nearly 200 words observed between 0 and 50 times in the book 
+
+sub_freq <- subset(frequencies, frequencies > 200)
+barplot(sub_freq)
+
+#Barplot of the words used 200 times or more in the book
+
+```
+
+```{r}
+#Visualization, Word Cloud
+
+install.packages("wordcloud")
+install.packages("RColorBrewer")
+library(wordcloud)
+library(RColorBrewer)
+
+palette <- brewer.pal(5,"BuGn")[-(1:2)]
+wordcloud(rownames(tdm_matrix),rowSums(tdm_matrix), min.freq = 50, colors = c("lightblue",palette)) #most frequent 50 words in the book 
+
+```
+
+```{r}
+#Visualization, Heat Map
+
+install.packages("slam")
+install.packages("reshape2")
+library(slam)
+library(reshape2)
+
+intensity <- removeSparseTerms(tdm, 0.01)
+
+matrix <- as.matrix(intensity)
+
+head(matrix)
+
+subset1 <- subset(rowSums(matrix),rowSums(matrix) > 100)
+subset1 <- names(subset1)
+
+matrix <- matrix[c(subset1),]
+
+tdm_intensity <- melt(matrix, value.name = "count")
+
+head(tdm_intensity)
+
+ggplot(tdm_intensity, aes(Docs, Terms, fill = log10(count))) +
+  geom_tile(colour = "white") +
+  scale_fill_gradient(high = "#FF0000", low = "#FFFFFF") +
+  ylab("") +
+  theme(panel.background = element_blank()) +
+  theme(axis.text.t = element_blank(), axis.ticks.x = element_blank())
+ 
+```
+
+```{r}
+#Examination with Cluster Analysis
+#transpose of the matrix
+
+dtm <- DocumentTermMatrix(document_xx)
+
+dtm_intensity <- removeSparseTerms(dtm, 0.1)
+
+frequencies1 <- as.matrix(dtm_intensity)
+
+head(frequencies1)
+
+row_sum <- rowSums(frequencies1)
+
+head(row_sum)
+
+ratio <- frequencies1/row_sum
+
+head(ratio)
+
+rbind(frequencies1[1:6,1:5], ratio[1:6,1:5])
+
+distance <- dist(ratio)
+
+library(cluster)
+
+cluster <- agnes(x = distance, method = "complete", metric = "euclidean")
+
+plot(cluster)
+
+
+```
